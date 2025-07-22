@@ -3,3 +3,4 @@ from .configuration_vits import VitsConfig
 from .feature_extraction_vits import VitsFeatureExtractor
 from .modeling_vits_training import VitsDiscriminator, VitsModelForPreTraining, slice_segments
 from .romanize import uromanize
+from .khmer_standardize import transform_khmer_sentence
