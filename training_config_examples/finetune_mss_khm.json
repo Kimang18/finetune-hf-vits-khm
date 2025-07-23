@@ -4,7 +4,7 @@
     "hub_model_id": "Kimang18/mms-tts-khm-finetuned",
     "report_to": ["wandb"],
     "overwrite_output_dir": true,
-    "output_dir": "./tmp/mms_finetuned_khm",
+    "output_dir": "/content/tmp/mms_finetuned_khm",
 
     "dataset_name": "seanghay/khmer_mpwt_speech",
     "audio_column_name": "audio", 
@@ -13,11 +13,11 @@
     "eval_split_name": "train",
 
     "full_generation_sample_text": "ផ្លាកសញ្ញា នេះ មាន ន័យ ដូចម្តេច?",
-    "max_duration_in_seconds": 15,
-    "min_duration_in_seconds": 1.0,
+    "max_duration_in_seconds": 14,
+    "min_duration_in_seconds": 0.5,
     "max_tokens_length": 500,
 
-    "model_name_or_path": "mms-tts-khm-decoder",
+    "model_name_or_path": "/content/mms-tts-khm",
 
     "preprocessing_num_workers": 4,
 
@@ -28,8 +28,8 @@
     "gradient_checkpointing": false,
     "per_device_train_batch_size": 16,
     "learning_rate": 2e-5,
-    "adam_beta1": 0.8,
-    "adam_beta2": 0.99,
+    "adam_beta1": 0.89,
+    "adam_beta2": 0.79,
     "warmup_ratio": 0.01,
     "group_by_length": false,
 
@@ -46,7 +46,7 @@
     "weight_duration": 1,
     "weight_mel": 35,
 
-    "fp16": false,
-    "seed": 168,
+    "fp16": true,
+    "seed": 168
 
 }
