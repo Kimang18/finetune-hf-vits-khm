@@ -985,12 +985,19 @@ def main():
     )
 
     if training_args.do_step_schedule_per_epoch:
-        gen_lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(
-            gen_optimizer, gamma=training_args.lr_decay, last_epoch=-1
+        # gen_lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(
+        #     gen_optimizer, gamma=training_args.lr_decay, last_epoch=-1
+        # )
+        # disc_lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(
+        #     disc_optimizer, gamma=training_args.lr_decay, last_epoch=-1
+        # )
+        gen_lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            gen_optimizer, T_max=num_training_steps-num_warmups_steps, eta_min=1e-7, last_epoch=-1
         )
-        disc_lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(
-            disc_optimizer, gamma=training_args.lr_decay, last_epoch=-1
+        disc_lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            disc_optimizer, T_max=num_training_steps-num_warmups_steps, eta_min=1e-7, last_epoch=-1
         )
+
     else:
         gen_lr_scheduler = get_scheduler(
             training_args.lr_scheduler_type,
