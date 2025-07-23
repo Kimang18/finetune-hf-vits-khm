@@ -991,6 +991,7 @@ def main():
         # disc_lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(
         #     disc_optimizer, gamma=training_args.lr_decay, last_epoch=-1
         # )
+        # NOTE: add linear warmup, check video-based-license-plate detection
         gen_lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             gen_optimizer, T_max=num_training_steps-num_warmups_steps, eta_min=1e-7, last_epoch=-1
         )
@@ -999,18 +1000,36 @@ def main():
         )
 
     else:
-        gen_lr_scheduler = get_scheduler(
-            training_args.lr_scheduler_type,
-            optimizer=gen_optimizer,
-            num_warmup_steps=num_warmups_steps if num_warmups_steps > 0 else None,
-            num_training_steps=num_training_steps,
+        gen_warmup_sl = torch.optim.lr_scheduler.LinearLR(
+            gen_optimizer, start_factor=1e-3, end_factor=1.0, total_iters=num_warmups_steps
         )
-        disc_lr_scheduler = get_scheduler(
-            training_args.lr_scheduler_type,
-            optimizer=disc_optimizer,
-            num_warmup_steps=num_warmups_steps if num_warmups_steps > 0 else None,
-            num_training_steps=num_training_steps,
+        gen_cos_sl = torch.optim.lr_scheduler.CosineAnnealingLR(
+            gen_optimizer, T_max=num_training_steps-num_warmups_steps, eta_min=1e-7, last_epoch=-1
         )
+        gen_lr_scheduler = torch.optim.lr_scheduler.SequentialLR(
+            gen_optimizer, schedulers=[gen_warmup_sl, gen_cos_sl], milestones=[num_warmups_steps]
+        )
+        disc_warmup_sl = torch.optim.lr_scheduler.LinearLR(
+            disc_optimizer, start_factor=1e-3, end_factor=1.0, total_iters=num_warmups_steps
+        )
+        disc_cos_sl = torch.optim.lr_scheduler.CosineAnnealingLR(
+            disc_optimizer, T_max=num_training_steps-num_warmups_steps, eta_min=1e-7, last_epoch=-1
+        )
+        disc_lr_scheduler = torch.optim.lr_scheduler.SequentialLR(
+            disc_optimizer, schedulers=[disc_warmup_sl, disc_cos_sl], milestones=[num_warmups_steps]
+        )
+        # gen_lr_scheduler = get_scheduler(
+        #     training_args.lr_scheduler_type,
+        #     optimizer=gen_optimizer,
+        #     num_warmup_steps=num_warmups_steps if num_warmups_steps > 0 else None,
+        #     num_training_steps=num_training_steps,
+        # )
+        # disc_lr_scheduler = get_scheduler(
+        #     training_args.lr_scheduler_type,
+        #     optimizer=disc_optimizer,
+        #     num_warmup_steps=num_warmups_steps if num_warmups_steps > 0 else None,
+        #     num_training_steps=num_training_steps,
+        # )
 
     # Prepare everything with our `accelerator`.
     (
