@@ -54,6 +54,6 @@ def transform_khmer_sentence(ds) -> Dict:
         elif words[j] == '?':
             ll[j-1] += '?'
         j += 1
-    transcription = " ".join(ll)
+    transcription = "".join(ll)
     #transcription = word_tokenize(ds["transcription"], return_tokens=False, separator=" ")
     return {"transcription": transcription}
