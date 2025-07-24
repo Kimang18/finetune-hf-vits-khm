@@ -968,7 +968,7 @@ def main():
 
     disc_optimizer = torch.optim.AdamW(
         discriminator.parameters(),
-        0.8*training_args.learning_rate,
+        0.7*training_args.learning_rate,
         betas=[training_args.adam_beta1, training_args.adam_beta2],
         eps=training_args.adam_epsilon,
     )
