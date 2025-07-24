@@ -1,6 +1,6 @@
 {
     "project_name": "mms_khmer-finetuning-female",
-    "push_to_hub": true,
+    "push_to_hub": false,
     "hub_model_id": "Kimang18/mms-tts-khm-finetuned",
     "report_to": ["wandb"],
     "overwrite_output_dir": true,
@@ -37,7 +37,7 @@
     "eval_steps": 64,
     "per_device_eval_batch_size": 16,
     "max_eval_samples": 32, 
-    "do_step_schedule_per_epoch": false,
+    "do_step_schedule_per_epoch": true,
 
     "weight_disc": 3,
     "weight_fmaps": 1,
