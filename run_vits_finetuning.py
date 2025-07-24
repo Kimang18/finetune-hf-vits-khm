@@ -968,7 +968,7 @@ def main():
 
     disc_optimizer = torch.optim.AdamW(
         discriminator.parameters(),
-        training_args.learning_rate,
+        0.8*training_args.learning_rate,
         betas=[training_args.adam_beta1, training_args.adam_beta2],
         eps=training_args.adam_epsilon,
     )
@@ -995,7 +995,7 @@ def main():
             gen_optimizer, start_factor=1e-3, end_factor=1.0, total_iters=num_warmups_steps
         )
         gen_cos_sl = torch.optim.lr_scheduler.CosineAnnealingLR(
-            gen_optimizer, T_max=num_training_steps-num_warmups_steps, eta_min=1e-7, last_epoch=-1
+            gen_optimizer, T_max=num_training_steps-num_warmups_steps, eta_min=1e-6, last_epoch=-1
         )
         gen_lr_scheduler = torch.optim.lr_scheduler.SequentialLR(
             gen_optimizer, schedulers=[gen_warmup_sl, gen_cos_sl], milestones=[num_warmups_steps]
