@@ -22,11 +22,11 @@
     "preprocessing_num_workers": 4,
 
     "do_train": true,
-    "num_train_epochs": 200,
+    "num_train_epochs": 300,
     "gradient_accumulation_steps": 1,
     "gradient_checkpointing": false,
     "per_device_train_batch_size": 16,
-    "learning_rate": 3e-4,
+    "learning_rate": 27e-5,
     "adam_beta1": 0.89,
     "adam_beta2": 0.99,
     "warmup_ratio": 0.02,
