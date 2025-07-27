@@ -6,7 +6,7 @@
     "overwrite_output_dir": true,
     "output_dir": "/content/tmp/mms_finetuned_khm",
 
-    "dataset_name": "Kimang18/clean_khmer_mpwt_speech-1",
+    "dataset_name": "Kimang18/clean_khmer_mpwt_speech-12",
     "audio_column_name": "audio", 
     "text_column_name":"transcription",
     "train_split_name": "train",
@@ -22,13 +22,13 @@
     "preprocessing_num_workers": 4,
 
     "do_train": true,
-    "num_train_epochs": 300,
+    "num_train_epochs": 200,
     "gradient_accumulation_steps": 1,
     "gradient_checkpointing": false,
     "per_device_train_batch_size": 16,
-    "learning_rate": 27e-5,
+    "learning_rate": 2e-4,
     "adam_beta1": 0.89,
-    "adam_beta2": 0.99,
+    "adam_beta2": 0.98,
     "warmup_ratio": 0.02,
     "group_by_length": false,
 
