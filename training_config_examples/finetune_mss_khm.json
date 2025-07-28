@@ -29,7 +29,7 @@
     "learning_rate": 2e-4,
     "adam_beta1": 0.9,
     "adam_beta2": 0.98,
-    "adam_epsilon": 1e-8,
+    "adam_epsilon": 1e-7,
     "weight_decay": 0.1,
     "warmup_ratio": 0.01,
     "group_by_length": false,
@@ -43,9 +43,9 @@
     "weight_disc": 3,
     "weight_fmaps": 1,
     "weight_gen": 1,
-    "weight_kl": 1.5,
+    "weight_kl": 1.65,
     "weight_duration": 1,
-    "weight_mel": 35,
+    "weight_mel": 35.5,
 
     "fp16": true,
     "seed": 168
