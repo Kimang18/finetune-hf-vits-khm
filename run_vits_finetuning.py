@@ -964,13 +964,15 @@ def main():
         training_args.learning_rate,
         betas=[training_args.adam_beta1, training_args.adam_beta2],
         eps=training_args.adam_epsilon,
+        weight_decay=training_args.weight_decay,
     )
 
     disc_optimizer = torch.optim.AdamW(
         discriminator.parameters(),
-        0.7*training_args.learning_rate,
+        training_args.learning_rate,
         betas=[training_args.adam_beta1, training_args.adam_beta2],
         eps=training_args.adam_epsilon,
+        weight_decay=training_args.weight_decay,
     )
 
     num_warmups_steps = (
