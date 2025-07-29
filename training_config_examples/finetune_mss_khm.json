@@ -27,7 +27,7 @@
     "gradient_checkpointing": false,
     "per_device_train_batch_size": 16,
     "learning_rate": 2e-4,
-    "lr_decay": 0.9998749453,
+    "lr_decay": 0,9991665972,
     "adam_beta1": 0.8,
     "adam_beta2": 0.99,
     "adam_epsilon": 1e-8,
@@ -44,9 +44,9 @@
     "weight_disc": 3,
     "weight_fmaps": 1,
     "weight_gen": 1,
-    "weight_kl": 1.45,
+    "weight_kl": 1.5,
     "weight_duration": 1,
-    "weight_mel": 36,
+    "weight_mel": 35,
 
     "fp16": true,
     "seed": 168
