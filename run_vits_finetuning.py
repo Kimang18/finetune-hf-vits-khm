@@ -827,8 +827,8 @@ def main():
         inference_mode=False, r=32, lora_alpha=32, lora_dropout=0.05
     )
     model.text_encoder = get_peft_model(model.text_encoder, peft_config)
-    inject_lora_to_conv(model.flow, r=2, lora_alpha=4)
-    inject_lora_to_conv(model.decoder, r=2, lora_alpha=4)
+    # inject_lora_to_conv(model.flow, r=2, lora_alpha=4)
+    # inject_lora_to_conv(model.decoder, r=2, lora_alpha=4)
 
     
     with training_args.main_process_first(desc="apply_weight_norm"):
