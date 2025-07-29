@@ -43,9 +43,9 @@
     "weight_disc": 3,
     "weight_fmaps": 1,
     "weight_gen": 1,
-    "weight_kl": 1.65,
+    "weight_kl": 1.45,
     "weight_duration": 1,
-    "weight_mel": 35.5,
+    "weight_mel": 36,
 
     "fp16": true,
     "seed": 168
