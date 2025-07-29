@@ -34,6 +34,9 @@ from transformers.optimization import get_scheduler
 from transformers.trainer_pt_utils import LengthGroupedSampler
 from transformers.trainer_utils import get_last_checkpoint, is_main_process
 from transformers.utils import send_example_telemetry
+
+from peft import get_peft_model, LoraConfig
+
 from utils import plot_alignment_to_numpy, plot_spectrogram_to_numpy, VitsDiscriminator, VitsModelForPreTraining, VitsFeatureExtractor, slice_segments, VitsConfig, uromanize, transform_khmer_sentence
 
 
@@ -808,6 +811,11 @@ def main():
         token=model_args.token,
         trust_remote_code=model_args.trust_remote_code,
     )
+    # add lora to model
+    peft_config = LoraConfig(
+        inference_mode=False, r=32, lora_alpha=32, lora_dropout=0.05
+    )
+    model = get_peft_model(model, peft_config)
 
     
     with training_args.main_process_first(desc="apply_weight_norm"):

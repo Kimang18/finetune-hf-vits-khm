@@ -7,3 +7,4 @@ Cython
 torchvision
 tha
 khmer-nltk
+peft
