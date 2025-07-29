@@ -37,7 +37,18 @@ from transformers.utils import send_example_telemetry
 
 from peft import get_peft_model, LoraConfig
 
-from utils import plot_alignment_to_numpy, plot_spectrogram_to_numpy, VitsDiscriminator, VitsModelForPreTraining, VitsFeatureExtractor, slice_segments, VitsConfig, uromanize, transform_khmer_sentence
+from utils import (
+    plot_alignment_to_numpy,
+    plot_spectrogram_to_numpy,
+    VitsDiscriminator,
+    VitsModelForPreTraining,
+    VitsFeatureExtractor,
+    slice_segments,
+    VitsConfig,
+    uromanize,
+    inject_lora_to_conv,
+    transform_khmer_sentence
+)
 
 
 if is_wandb_available():
@@ -815,7 +826,9 @@ def main():
     peft_config = LoraConfig(
         inference_mode=False, r=32, lora_alpha=32, lora_dropout=0.05
     )
-    model = get_peft_model(model, peft_config)
+    model.text_encoder = get_peft_model(model.text_encoder, peft_config)
+    inject_lora_to_conv(model.flow, r=2, lora_alpha=4)
+    inject_lora_to_conv(model.decoder, r=2, lora_alpha=4)
 
     
     with training_args.main_process_first(desc="apply_weight_norm"):

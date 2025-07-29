@@ -23,6 +23,7 @@ import numpy as np
 import torch
 import torch.utils.checkpoint
 from torch import nn
+import torch.nn.functional as F
 
 from transformers.activations import ACT2FN
 from transformers.integrations.deepspeed import is_deepspeed_zero3_enabled
@@ -780,6 +781,46 @@ class HifiGanResidualBlock(nn.Module):
             hidden_states = conv2(hidden_states)
             hidden_states = hidden_states + residual
         return hidden_states
+
+
+class LoRAConv1d(nn.Module):
+    """
+    Implement model of LoRA-C paper
+    """
+    def __init__(self, conv, r, lora_alpha):
+        super().__init__()
+        self.r = r
+        self.lora_alpha = lora_alpha
+        self.scaling = float(lora_alpha) / r
+
+        self.conv = conv # original Conv1d
+        # Freeze original conv weights
+        for param in self.conv.parameters():
+            param.requires_grad = False
+
+        c_out, c_in, ks = self.conv.weight.size()
+        self.ks = ks
+        # LoRA adapter layers
+        self.lora_A = nn.Parameter(torch.Tensor(c_in * ks, r * ks))
+        self.lora_B = nn.Parameter(torch.Tensor(r * ks, c_out))
+
+        # Initialize LoRA B layers to zero
+        nn.init.kaiming_uniform_(self.lora_A, mode='fan_in', nonlinearity='relu')
+        nn.init.zeros_(self.lora_B)
+
+    def forward(self, x):
+        w = self.scaling * self.lora_A.matmul(self.lora_B)
+        w = w.view(self.conv.out_channels, self.conv.in_channels, self.ks)
+        w = self.conv.weight + w
+        return F.conv1d(x, w, bias=self.conv.bias, stride=self.conv.stride, padding=self.conv.padding, dilation=self.conv.dilation, groups=self.conv.groups)
+
+
+def inject_lora_to_conv(module, r, lora_alpha):
+    for name, child in module.named_children():
+        if isinstance(child, nn.Conv1d):
+            setattr(module, name, LoRAConv1d(child, r=r, lora_alpha=lora_alpha))
+        else:
+            inject_lora_to_conv(child, r=r, lora_alpha=lora_alpha)
 
 
 class VitsHifiGan(nn.Module):
