@@ -49,6 +49,7 @@
     "weight_mel": 35,
 
     "fp16": true,
-    "seed": 168
-
+    "seed": 168,
+    "mas_noise_scale": 0.01,
+    "mas_noise_scale_decay": 2.0e-05
 }

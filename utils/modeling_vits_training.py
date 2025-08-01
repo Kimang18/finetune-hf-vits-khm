@@ -2114,6 +2114,7 @@ class VitsModelForPreTraining(VitsPreTrainedModel):
         labels: Optional[torch.FloatTensor] = None,
         labels_attention_mask: Optional[torch.Tensor] = None,
         monotonic_alignment_function: Optional[Callable] = None,
+        mas_noise_scale: float = 0.01,
     ) -> Union[Tuple[Any], VitsModelOutput]:
         r"""
         labels (`torch.FloatTensor` of shape `(batch_size, config.spectrogram_bins, sequence_length)`, *optional*):
@@ -2236,6 +2237,11 @@ class VitsModelForPreTraining(VitsPreTrainedModel):
 
             # [batch_size, text_length, latent_length]
             neg_cent = neg_cent1 + neg_cent2 + neg_cent3 + neg_cent4
+
+            # NOTE: inspired by https://github.com/daniilrobnikov/vits2/blob/0525da4a558da999a725b9fddaa4584617df328b/utils/monotonic_align.py#L12C1-L28C1
+            if mas_noise_scale > 0.0:
+                epsilon = torch.std(neg_cent) * torch.randn_like(neg_cent) * mas_noise_scale
+                neg_cent = neg_cent + epsilon
 
             attn_mask = torch.unsqueeze(input_padding_mask, 2) * torch.unsqueeze(labels_padding_mask, -1)
 
