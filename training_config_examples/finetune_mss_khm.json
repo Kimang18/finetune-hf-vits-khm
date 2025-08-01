@@ -49,5 +49,5 @@
     "weight_mel": 35,
 
     "fp16": true,
-    "seed": 168,
+    "seed": 168
 }
