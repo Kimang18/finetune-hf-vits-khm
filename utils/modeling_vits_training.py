@@ -932,7 +932,7 @@ class VitsResidualCouplingLayer(nn.Module):
                 dropout=0.1,
                 window_size=None
             )
-        ) if True else None
+        ) if False else None
 
         self.conv_pre = nn.Conv1d(self.half_channels, config.hidden_size, 1)
         self.wavenet = VitsWaveNet(config, num_layers=config.prior_encoder_num_wavenet_layers)
@@ -1042,10 +1042,10 @@ class VitsDilatedDepthSeparableConv(nn.Module):
 
         for i in range(self.num_layers):
             hidden_states = self.convs_dilated[i](inputs * padding_mask)
-            hidden_states = self.norms_1[i](hidden_states.transpose(1, -1)).transpose(1, -1)
+            hidden_states = self.norms_1[i](hidden_states.mT).mT
             hidden_states = nn.functional.gelu(hidden_states)
             hidden_states = self.convs_pointwise[i](hidden_states)
-            hidden_states = self.norms_2[i](hidden_states.transpose(1, -1)).transpose(1, -1)
+            hidden_states = self.norms_2[i](hidden_states.mT).mT
             hidden_states = nn.functional.gelu(hidden_states)
             hidden_states = self.dropout(hidden_states)
             inputs = inputs + hidden_states
@@ -1257,12 +1257,12 @@ class VitsDurationPredictor(nn.Module):
 
         inputs = self.conv_1(inputs * padding_mask)
         inputs = torch.relu(inputs)
-        inputs = self.norm_1(inputs.transpose(1, -1)).transpose(1, -1)
+        inputs = self.norm_1(inputs.mT).mT
         inputs = self.dropout(inputs)
 
         inputs = self.conv_2(inputs * padding_mask)
         inputs = torch.relu(inputs)
-        inputs = self.norm_2(inputs.transpose(1, -1)).transpose(1, -1)
+        inputs = self.norm_2(inputs.mT).mT
         inputs = self.dropout(inputs)
 
         inputs = self.proj(inputs * padding_mask)
