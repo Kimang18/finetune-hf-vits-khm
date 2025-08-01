@@ -4,6 +4,20 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 
+class LayerNorm(nn.Module):
+    def __init__(self, channels, eps=1e-5):
+        super().__init__()
+        self.channels = channels
+        self.eps = eps
+
+        self.gamma = nn.Parameter(torch.ones(channels))
+        self.beta = nn.Parameter(torch.zeros(channels))
+
+    def forward(self, x: torch.Tensor):
+        x = F.layer_norm(x.mT, (self.channels,), self.gamma, self.beta, self.eps)
+        return x.mT
+
+
 class RelativePositionTransformer(nn.Module):
     def __init__(
         self,
@@ -30,9 +44,9 @@ class RelativePositionTransformer(nn.Module):
         self.norm_layers_2 = nn.ModuleList()
         for i in range(self.n_layers):
             self.attn_layers.append(MultiHeadAttention(hidden_channels if i != 0 else in_channels, hidden_channels, n_heads, p_dropout=dropout, window_size=window_size))
-            self.norm_layers_1.append(nn.LayerNorm(hidden_channels))
+            self.norm_layers_1.append(LayerNorm(hidden_channels))
             self.ffn_layers.append(FFN(hidden_channels, hidden_channels, hidden_channels_ffn, kernel_size, p_dropout=dropout))
-            self.norm_layers_2.append(nn.LayerNorm(hidden_channels))
+            self.norm_layers_2.append(LayerNorm(hidden_channels))
         if gin_channels != 0:
             self.cond = nn.Linear(gin_channels, hidden_channels)
 
@@ -137,7 +151,7 @@ class MultiHeadAttention(nn.Module):
                 block_mask = torch.ones_like(scores).triu(-self.block_length).tril(self.block_length)
                 scores = scores.masked_fill(block_mask == 0, -1e4)
         p_attn = F.softmax(scores, dim=-1)  # [b, n_h, t_t, t_s]
-        p_attn = self.drop(p_attn)
+        p_attn = self.dropout(p_attn)
         output = torch.matmul(p_attn, value)
         if self.window_size is not None:
             relative_weights = self._absolute_position_to_relative_position(p_attn)
@@ -226,12 +240,12 @@ class FFN(nn.Module):
 
         self.conv_1 = nn.Conv1d(in_channels, filter_channels, kernel_size)
         self.conv_2 = nn.Conv1d(filter_channels, out_channels, kernel_size)
-        self.drop = nn.Dropout(p_dropout)
+        self.dropout = nn.Dropout(p_dropout)
 
     def forward(self, x, x_mask):
         x = self.conv_1(self.padding(x * x_mask))
         x = torch.relu(x)
-        x = self.drop(x)
+        x = self.dropout(x)
         x = self.conv_2(self.padding(x * x_mask))
         return x * x_mask
 
