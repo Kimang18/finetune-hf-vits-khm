@@ -60,6 +60,8 @@ logger = logging.getLogger(__name__)
 
 
 #### ARGUMENTS
+mas_noise_scale = 0.01
+mas_noise_scale_decay = 1.0e-5
 
 
 @dataclass
@@ -1132,7 +1134,7 @@ def main():
             # print(f"batch {step}, process{accelerator.process_index}, waveform {(batch['waveform'].shape)}, tokens {(batch['input_ids'].shape)}... ")
             with accelerator.accumulate(model, discriminator):
                 # forward through model
-                mas_noise_scale = max(training_args.mas_noise_scale - global_step * training_args.mas_noise_scale_decay, 0.0)
+                tr_mas_noise_scale = max(mas_noise_scale - global_step * mas_noise_scale_decay, 0.0)
                 model_outputs = model(
                     input_ids=batch["input_ids"],
                     attention_mask=batch["attention_mask"],
@@ -1141,7 +1143,7 @@ def main():
                     speaker_id=batch["speaker_id"],
                     return_dict=True,
                     monotonic_alignment_function=maximum_path,
-                    mas_noise_scale=mas_noise_scale,
+                    mas_noise_scale=tr_mas_noise_scale,
                 )
 
                 mel_scaled_labels = batch["mel_scaled_input_features"]
