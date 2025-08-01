@@ -35,6 +35,7 @@ from transformers.modeling_outputs import (
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import add_start_docstrings, add_start_docstrings_to_model_forward, logging, replace_return_docstrings
 from .configuration_vits import VitsConfig
+from .transformer import RelativePositionTransformer
 
 
 logger = logging.get_logger(__name__)
@@ -919,6 +920,19 @@ class VitsResidualCouplingLayer(nn.Module):
     def __init__(self, config: VitsConfig):
         super().__init__()
         self.half_channels = config.flow_size // 2
+        self.pre_transformer = (
+            RelativePositionTransformer(
+                self.half_channels,
+                self.half_channels,
+                self.half_channels,
+                self.half_channels,
+                n_heads=2,
+                n_layers=1,
+                kernel_size=3,
+                dropout=0.1,
+                window_size=None
+            )
+        ) if False else None
 
         self.conv_pre = nn.Conv1d(self.half_channels, config.hidden_size, 1)
         self.wavenet = VitsWaveNet(config, num_layers=config.prior_encoder_num_wavenet_layers)
@@ -926,7 +940,12 @@ class VitsResidualCouplingLayer(nn.Module):
 
     def forward(self, inputs, padding_mask, global_conditioning=None, reverse=False):
         first_half, second_half = torch.split(inputs, [self.half_channels] * 2, dim=1)
-        hidden_states = self.conv_pre(first_half) * padding_mask
+        first_half_ = first_half
+        if self.pre_transformer is not None:
+            first_half_ = self.pre_transformer(first_half * padding_mask, padding_mask)
+            first_half_ = first_half_ + first_half
+        hidden_states = self.conv_pre(first_half_) * padding_mask
+
         hidden_states = self.wavenet(hidden_states, padding_mask, global_conditioning)
         mean = self.conv_post(hidden_states) * padding_mask
         log_stddev = torch.zeros_like(mean)
@@ -2240,7 +2259,7 @@ class VitsModelForPreTraining(VitsPreTrainedModel):
 
             # NOTE: inspired by https://github.com/daniilrobnikov/vits2/blob/0525da4a558da999a725b9fddaa4584617df328b/utils/monotonic_align.py#L12C1-L28C1
             if mas_noise_scale > 0.0:
-                epsilon = torch.std(neg_cent) * torch.randn_like(neg_cent) * mas_noise_scale
+                epsilon = mas_noise_scale * torch.std(neg_cent) * torch.randn_like(neg_cent)
                 neg_cent = neg_cent + epsilon
 
             attn_mask = torch.unsqueeze(input_padding_mask, 2) * torch.unsqueeze(labels_padding_mask, -1)
