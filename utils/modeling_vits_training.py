@@ -932,7 +932,7 @@ class VitsResidualCouplingLayer(nn.Module):
                 dropout=0.1,
                 window_size=None
             )
-        ) if False else None
+        ) if True else None
 
         self.conv_pre = nn.Conv1d(self.half_channels, config.hidden_size, 1)
         self.wavenet = VitsWaveNet(config, num_layers=config.prior_encoder_num_wavenet_layers)
