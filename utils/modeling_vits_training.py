@@ -926,7 +926,7 @@ class VitsResidualCouplingLayer(nn.Module):
                 self.half_channels,
                 self.half_channels,
                 self.half_channels,
-                n_heads=4,
+                n_heads=3,
                 n_layers=2,
                 kernel_size=3,
                 dropout=0.1,
