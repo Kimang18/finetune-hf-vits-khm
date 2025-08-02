@@ -25,14 +25,14 @@ class RelativePositionTransformer(nn.Module):
         self.speaker_cond_layer = speaker_cond_layer
         self.dropout = nn.Dropout(dropout)
         self.attn_layers = nn.ModuleList()
-        self.norm_layers_1 = nn.ModuleList()
+        self.norms_1 = nn.ModuleList()
         self.ffn_layers = nn.ModuleList()
-        self.norm_layers_2 = nn.ModuleList()
+        self.norms_2 = nn.ModuleList()
         for i in range(self.n_layers):
             self.attn_layers.append(MultiHeadAttention(hidden_channels if i != 0 else in_channels, hidden_channels, n_heads, p_dropout=dropout, window_size=window_size))
-            self.norm_layers_1.append(nn.LayerNorm(hidden_channels))
+            self.norms_1.append(nn.LayerNorm(hidden_channels))
             self.ffn_layers.append(FFN(hidden_channels, hidden_channels, hidden_channels_ffn, kernel_size, p_dropout=dropout))
-            self.norm_layers_2.append(nn.LayerNorm(hidden_channels))
+            self.norms_2.append(nn.LayerNorm(hidden_channels))
         if gin_channels != 0:
             self.cond = nn.Linear(gin_channels, hidden_channels)
 
@@ -45,11 +45,11 @@ class RelativePositionTransformer(nn.Module):
                 x = x * x_mask
             y = self.attn_layers[i](x, x, attn_mask)
             y = self.dropout(y)
-            x = self.norm_layers_1[i]((x + y).mT).mT
+            x = self.norms_1[i]((x + y).mT).mT
 
             y = self.ffn_layers[i](x, x_mask)
             y = self.dropout(y)
-            x = self.norm_layers_2[i]((x + y).mT).mT
+            x = self.norms_2[i]((x + y).mT).mT
         x = x * x_mask
         return x
 
