@@ -83,7 +83,7 @@ class MultiHeadAttention(nn.Module):
 
         self.k_channels = in_channels // n_heads
         self.conv_q = nn.Linear(in_channels, in_channels)
-        self.conv_k = nn.Linear(in_channels, in_channels, bias=False)
+        self.conv_k = nn.Linear(in_channels, in_channels)
         self.conv_v = nn.Linear(in_channels, in_channels)
         self.conv_o = nn.Linear(in_channels, out_channels)
         self.dropout = nn.Dropout(p_dropout)
@@ -100,7 +100,7 @@ class MultiHeadAttention(nn.Module):
         if proximal_init:
             with torch.no_grad():
                 self.conv_k.weight.copy_(self.conv_q.weight)
-                # self.conv_k.bias.copy_(self.conv_q.bias) # no bias for key
+                self.conv_k.bias.copy_(self.conv_q.bias) # no bias for key
 
     def forward(self, x, c, attn_mask=None):
         q = self.conv_q(x.mT).mT
