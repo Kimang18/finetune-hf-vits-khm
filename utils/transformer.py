@@ -83,7 +83,7 @@ class MultiHeadAttention(nn.Module):
 
         self.k_channels = in_channels // n_heads
         self.conv_q = nn.Linear(in_channels, in_channels)
-        self.conv_k = nn.Linear(in_channels, in_channels)
+        self.conv_k = nn.Linear(in_channels, in_channels, bias=False)
         self.conv_v = nn.Linear(in_channels, in_channels)
         self.conv_o = nn.Linear(in_channels, out_channels)
         self.dropout = nn.Dropout(p_dropout)
@@ -100,7 +100,7 @@ class MultiHeadAttention(nn.Module):
         if proximal_init:
             with torch.no_grad():
                 self.conv_k.weight.copy_(self.conv_q.weight)
-                self.conv_k.bias.copy_(self.conv_q.bias)
+                # self.conv_k.bias.copy_(self.conv_q.bias) # no bias for key
 
     def forward(self, x, c, attn_mask=None):
         q = self.conv_q(x.mT).mT
@@ -120,7 +120,8 @@ class MultiHeadAttention(nn.Module):
         key = key.view(b, self.n_heads, self.k_channels, t_s).mT
         value = value.view(b, self.n_heads, self.k_channels, t_s).mT
 
-        scores = torch.matmul(query / math.sqrt(self.k_channels), key.mT)
+        scale = 1.0 / math.sqrt(self.k_channels)
+        scores = torch.matmul(scale * query, key.mT)
         if self.window_size is not None:
             assert t_s == t_t, "Relative attention is only available for self-attention."
             key_relative_embeddings = self._get_relative_embeddings(self.emb_rel_k, t_s)
