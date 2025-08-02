@@ -106,9 +106,14 @@ class MultiHeadAttention(nn.Module):
         q = self.conv_q(x.mT).mT
         k = self.conv_k(c.mT).mT
         v = self.conv_v(c.mT).mT
-
         # x, self.attn = self.attention(q, k, v, mask=attn_mask)
-        x = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=self.p_dropout)
+
+        b, d, t_s, t_t = (*k.size(), q.size(2))
+        q = q.view(b, self.n_heads, self.k_channels, t_t).mT
+        k = k.view(b, self.n_heads, self.k_channels, t_s).mT
+        v = v.view(b, self.n_heads, self.k_channels, t_s).mT
+        out = self.dropout(F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=0.0))
+        x = out.mT.contiguous().view(b, d, t_t)
 
         x = self.conv_o(x.mT).mT
 
