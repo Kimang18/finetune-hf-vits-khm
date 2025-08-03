@@ -924,7 +924,7 @@ class VitsHifiGan(nn.Module):
 class VitsResidualCouplingLayer(nn.Module):
     def __init__(self, config: VitsConfig):
         super().__init__()
-        self.mean_only = False
+        self.mean_only = True
         self.half_channels = config.flow_size // 2
         self.pre_transformer = (
             RelativePositionTransformer(
@@ -958,7 +958,7 @@ class VitsResidualCouplingLayer(nn.Module):
             mean_flow, log_stddev = torch.split(stats, [self.half_channels] * 2, 1)
         else:
             mean_flow = stats
-            log_stddev = torch.zeros_like(mean)
+            log_stddev = torch.zeros_like(mean_flow)
 
         m1 , m2 = torch.split(means, [self.half_channels] * 2, dim=1)
         log1, log2 = torch.split(log_variances, [self.half_channels] * 2, dim=1)

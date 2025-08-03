@@ -1156,7 +1156,7 @@ def main():
 
     for epoch in range(first_epoch, training_args.num_train_epochs):
         # keep track of train losses
-        train_losses = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        train_losses = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
         if training_args.do_step_schedule_per_epoch:
             disc_lr_scheduler.step()
