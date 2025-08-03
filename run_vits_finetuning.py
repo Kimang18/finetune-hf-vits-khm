@@ -520,20 +520,20 @@ def compute_val_metrics_and_losses(
     compute_clap_similarity=False,
 ):
     loss_mel = torch.nn.functional.l1_loss(mel_scaled_target, mel_scaled_generation)
-    loss_kl = kl_loss(
-        model_outputs.prior_latents,
-        model_outputs.posterior_log_variances,
-        model_outputs.prior_means,
-        model_outputs.prior_log_variances,
+    loss_kl_dur = kl_loss(
+        model_outputs.posterior_latents_dur,
+        model_outputs.posterior_log_variances_dur,
+        model_outputs.prior_means_dur,
+        model_outputs.prior_log_variances_dur,
         model_outputs.labels_padding_mask,
     )
 
-    losses_mel_kl = loss_mel + loss_kl
+    losses_mel_kl = loss_mel + loss_kl_dur
 
-    losses = torch.stack([loss_mel, loss_kl, losses_mel_kl])
+    losses = torch.stack([loss_mel, loss_kl_dur, losses_mel_kl])
     losses = accelerator.gather(losses.repeat(batch_size, 1)).mean(0)
 
-    for key, loss in zip(["val_loss_mel", "val_loss_kl", "val_loss_mel_kl"], losses):
+    for key, loss in zip(["val_loss_mel", "val_loss_kl_dur", "val_loss_mel_kl"], losses):
         val_losses[key] = val_losses.get(key, 0) + loss.item()
 
     return val_losses
@@ -1188,11 +1188,11 @@ def main():
 
                 loss_duration = torch.sum(model_outputs.log_duration)
                 loss_mel = torch.nn.functional.l1_loss(mel_scaled_target, mel_scaled_generation)
-                loss_kl = kl_loss(
-                    model_outputs.prior_latents,
-                    model_outputs.posterior_log_variances,
-                    model_outputs.prior_means,
-                    model_outputs.prior_log_variances,
+                loss_kl_dur = kl_loss(
+                    model_outputs.posterior_latents_dur,
+                    model_outputs.posterior_log_variances_dur,
+                    model_outputs.prior_means_dur,
+                    model_outputs.prior_log_variances_dur,
                     model_outputs.labels_padding_mask,
                 )
                 loss_fmaps = feature_loss(fmaps_target, fmaps_candidate)
@@ -1201,7 +1201,7 @@ def main():
                 total_generator_loss = (
                     loss_duration * training_args.weight_duration
                     + loss_mel * training_args.weight_mel
-                    + loss_kl * training_args.weight_kl
+                    + loss_kl_dur * training_args.weight_kl
                     + loss_fmaps * training_args.weight_fmaps
                     + loss_gen * training_args.weight_gen
                 )
@@ -1219,10 +1219,10 @@ def main():
                 losses = torch.stack(
                     [
                         # for fair comparison, don't use weighted loss
-                        loss_duration + loss_mel + loss_kl + loss_fmaps + loss_gen,
+                        loss_duration + loss_mel + loss_kl_dur + loss_fmaps + loss_gen,
                         loss_duration,
                         loss_mel,
-                        loss_kl,
+                        loss_kl_dur,
                         loss_fmaps,
                         loss_gen,
                         loss_disc,
@@ -1243,7 +1243,7 @@ def main():
                     train_summed_losses,
                     train_loss_duration,
                     train_loss_mel,
-                    train_loss_kl,
+                    train_loss_kl_dur,
                     train_loss_fmaps,
                     train_loss_gen,
                     train_loss_disc,
@@ -1260,7 +1260,7 @@ def main():
                         "train_loss_fake_disc": train_loss_fake_disc,
                         "train_loss_duration": train_loss_duration,
                         "train_loss_mel": train_loss_mel,
-                        "train_loss_kl": train_loss_kl,
+                        "train_loss_kl_dur": train_loss_kl_dur,
                         "train_loss_fmaps": train_loss_fmaps,
                         "train_loss_gen": train_loss_gen,
                         "lr": disc_lr_scheduler.get_last_lr()[0],
@@ -1300,7 +1300,7 @@ def main():
                 "lr": disc_lr_scheduler.get_last_lr()[0],
                 "step_loss_duration": loss_duration.detach().item(),
                 "step_loss_mel": loss_mel.detach().item(),
-                "step_loss_kl": loss_kl.detach().item(),
+                "step_loss_kl_dur": loss_kl_dur.detach().item(),
                 "step_loss_fmaps": loss_fmaps.detach().item(),
                 "step_loss_gen": loss_gen.detach().item(),
                 "step_loss_disc": loss_disc.detach().item(),

@@ -155,12 +155,16 @@ class VitsTrainingOutput(ModelOutput):
     ids_slice: torch.FloatTensor = None
     input_padding_mask: torch.FloatTensor = None
     labels_padding_mask: torch.FloatTensor = None
-    latents: torch.FloatTensor = None
-    prior_latents: torch.FloatTensor = None
-    prior_means: torch.FloatTensor = None
-    prior_log_variances: torch.FloatTensor = None
-    posterior_means: torch.FloatTensor = None
-    posterior_log_variances: torch.FloatTensor = None
+    prior_means_txt: torch.FloatTensor = None
+    prior_log_variances_txt: torch.FloatTensor = None
+    prior_means_dur: torch.FloatTensor = None
+    prior_log_variances_dur: torch.FloatTensor = None
+    posterior_latents_dur: torch.FloatTensor = None
+    posterior_log_variances_dur: torch.FloatTensor = None
+    prior_means_aud: torch.FloatTensor = None
+    prior_log_variances_aud: torch.FloatTensor = None
+    posterior_means_aud: torch.FloatTensor = None
+    posterior_log_variances_aud: torch.FloatTensor = None
 
 
 @torch.jit.script
@@ -919,6 +923,7 @@ class VitsHifiGan(nn.Module):
 class VitsResidualCouplingLayer(nn.Module):
     def __init__(self, config: VitsConfig):
         super().__init__()
+        self.mean_only = False
         self.half_channels = config.flow_size // 2
         self.pre_transformer = (
             RelativePositionTransformer(
@@ -926,7 +931,7 @@ class VitsResidualCouplingLayer(nn.Module):
                 self.half_channels,
                 self.half_channels,
                 self.half_channels,
-                n_heads=3,
+                n_heads=4,
                 n_layers=2,
                 kernel_size=3,
                 dropout=0.1,
@@ -936,9 +941,9 @@ class VitsResidualCouplingLayer(nn.Module):
 
         self.conv_pre = nn.Conv1d(self.half_channels, config.hidden_size, 1)
         self.wavenet = VitsWaveNet(config, num_layers=config.prior_encoder_num_wavenet_layers)
-        self.conv_post = nn.Conv1d(config.hidden_size, self.half_channels, 1)
+        self.conv_post = nn.Conv1d(config.hidden_size, self.half_channels * (2 - self.mean_only), 1)
 
-    def forward(self, inputs, padding_mask, global_conditioning=None, reverse=False):
+    def forward(self, inputs, means, log_variances, padding_mask, global_conditioning=None, reverse=False):
         first_half, second_half = torch.split(inputs, [self.half_channels] * 2, dim=1)
         first_half_ = first_half
         if self.pre_transformer is not None:
@@ -947,18 +952,36 @@ class VitsResidualCouplingLayer(nn.Module):
         hidden_states = self.conv_pre(first_half_) * padding_mask
 
         hidden_states = self.wavenet(hidden_states, padding_mask, global_conditioning)
-        mean = self.conv_post(hidden_states) * padding_mask
-        log_stddev = torch.zeros_like(mean)
-
-        if not reverse:
-            second_half = mean + second_half * torch.exp(log_stddev) * padding_mask
-            outputs = torch.cat([first_half, second_half], dim=1)
-            log_determinant = torch.sum(log_stddev, [1, 2])
-            return outputs, log_determinant
+        stats = self.conv_post(hidden_states) * padding_mask
+        if not self.mean_only:
+            mean_flow, log_stddev = torch.split(stats, [self.half_channels] * 2, 1)
         else:
-            second_half = (second_half - mean) * torch.exp(-log_stddev) * padding_mask
-            outputs = torch.cat([first_half, second_half], dim=1)
-            return outputs, None
+            mean_flow = stats
+            log_stddev = torch.zeros_like(mean)
+
+        m1 , m2 = torch.split(means, [self.half_channels] * 2, dim=1)
+        log1, log2 = torch.split(log_variances, [self.half_channels] * 2, dim=1)
+        if not reverse:
+            second_half = mean_flow + second_half * torch.exp(log_stddev) * padding_mask
+            m2 = mean_flow + m2 * torch.exp(log_stddev) * padding_mask
+            log2 = log2 + log_stddev
+
+            # outputs = torch.cat([first_half, second_half], dim=1)
+            # log_determinant = torch.sum(log_stddev, [1, 2])
+            # return outputs, means, logs
+        else:
+            second_half = (second_half - mean_flow) * torch.exp(-log_stddev) * padding_mask
+            m2 = (m2 - mean_flow) * torch.exp(-log_stddev) * padding_mask
+            log2 = log2 - log_stddev
+            # outputs = torch.cat([first_half, second_half], dim=1)
+            # return outputs, None
+
+        outputs = torch.cat([first_half, second_half], dim=1)
+        means = torch.cat([m1, m2], dim=1)
+        logs = torch.cat([log1, log2], dim=1)
+        # log_determinant = torch.sum(log_stddev, [1, 2])
+        return outputs, means, logs
+
 
     def apply_weight_norm(self):
         nn.utils.weight_norm(self.conv_pre)
@@ -978,16 +1001,20 @@ class VitsResidualCouplingBlock(nn.Module):
         for _ in range(config.prior_encoder_num_flows):
             self.flows.append(VitsResidualCouplingLayer(config))
 
-    def forward(self, inputs, padding_mask, global_conditioning=None, reverse=False):
+    def forward(self, inputs, means, log_variances, padding_mask, global_conditioning=None, reverse=False):
         if not reverse:
             for flow in self.flows:
-                inputs, _ = flow(inputs, padding_mask, global_conditioning)
+                inputs, means, log_variances = flow(inputs, means, log_variances, padding_mask, global_conditioning)
                 inputs = torch.flip(inputs, [1])
+                means = torch.flip(means, [1])
+                log_variances = torch.flip(log_variances, [1])
         else:
             for flow in reversed(self.flows):
                 inputs = torch.flip(inputs, [1])
-                inputs, _ = flow(inputs, padding_mask, global_conditioning, reverse=True)
-        return inputs
+                means = torch.flip(means, [1])
+                log_variances = torch.flip(log_variances, [1])
+                inputs, means, log_variances = flow(inputs, means, log_variances, padding_mask, global_conditioning, reverse=True)
+        return inputs, means, logs
 
     def apply_weight_norm(self):
         for flow in self.flows:
@@ -2228,31 +2255,31 @@ class VitsModelForPreTraining(VitsPreTrainedModel):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
-        hidden_states = text_encoder_output[0] if not return_dict else text_encoder_output.last_hidden_state
-        hidden_states = hidden_states.transpose(1, 2)
+        hidden_states_txt = text_encoder_output[0] if not return_dict else text_encoder_output.last_hidden_state
+        hidden_states_txt = hidden_states_txt.transpose(1, 2)
         input_padding_mask = input_padding_mask.transpose(1, 2)
-        prior_means = text_encoder_output[1] if not return_dict else text_encoder_output.prior_means
-        prior_log_variances = text_encoder_output[2] if not return_dict else text_encoder_output.prior_log_variances
+        prior_means_txt = text_encoder_output[1] if not return_dict else text_encoder_output.prior_means
+        prior_log_variances_txt = text_encoder_output[2] if not return_dict else text_encoder_output.prior_log_variances
 
-        latents, posterior_means, posterior_log_variances = self.posterior_encoder(
+        posterior_latents_aud, posterior_means_aud, posterior_log_variances_aud = self.posterior_encoder(
             labels, labels_padding_mask, speaker_embeddings
         )
-        prior_latents = self.flow(latents, labels_padding_mask, speaker_embeddings, reverse=False)
+        posterior_latents_dur, posterior_means_dur, posterior_log_variances_dur = self.flow(posterior_latents_aud, posterior_means_aud, posterior_log_variances_aud, labels_padding_mask, speaker_embeddings, reverse=False)
 
-        prior_means, prior_log_variances = prior_means.transpose(1, 2), prior_log_variances.transpose(1, 2)
+        prior_means_txt, prior_log_variances_txt = prior_means_txt.transpose(1, 2), prior_log_variances_txt.transpose(1, 2)
         with torch.no_grad():
             # negative cross-entropy
 
             # [batch_size, d, latent_length]
-            prior_variances = torch.exp(-2 * prior_log_variances)
+            prior_variances = torch.exp(-2 * prior_log_variances_txt)
             # [batch_size, 1, latent_length]
-            neg_cent1 = torch.sum(-0.5 * math.log(2 * math.pi) - prior_log_variances, [1], keepdim=True)
+            neg_cent1 = torch.sum(-0.5 * math.log(2 * math.pi) - prior_log_variances_txt, [1], keepdim=True)
             # [batch_size, text_length, d] x [batch_size, d, latent_length] = [batch_size, text_length, latent_length]
-            neg_cent2 = torch.matmul(-0.5 * (prior_latents**2).transpose(1, 2), prior_variances)
+            neg_cent2 = torch.matmul(-0.5 * (posterior_latents_dur**2).transpose(1, 2), prior_variances)
             # [batch_size, text_length, d] x [batch_size, d, latent_length] = [batch_size, text_length, latent_length]
-            neg_cent3 = torch.matmul(prior_latents.transpose(1, 2), (prior_means * prior_variances))
+            neg_cent3 = torch.matmul(posterior_latents_dur.transpose(1, 2), (prior_means_txt * prior_variances))
             # [batch_size, 1, latent_length]
-            neg_cent4 = torch.sum(-0.5 * (prior_means**2) * prior_variances, [1], keepdim=True)
+            neg_cent4 = torch.sum(-0.5 * (prior_means_txt**2) * prior_variances, [1], keepdim=True)
 
             # [batch_size, text_length, latent_length]
             neg_cent = neg_cent1 + neg_cent2 + neg_cent3 + neg_cent4
@@ -2270,20 +2297,25 @@ class VitsModelForPreTraining(VitsPreTrainedModel):
 
         if self.config.use_stochastic_duration_prediction:
             log_duration = self.duration_predictor(
-                hidden_states, input_padding_mask, speaker_embeddings, durations=durations, reverse=False
+                hidden_states_txt, input_padding_mask, speaker_embeddings, durations=durations, reverse=False
             )
             log_duration = log_duration / torch.sum(input_padding_mask)
         else:
             log_duration_padded = torch.log(durations + 1e-6) * input_padding_mask
-            log_duration = self.duration_predictor(hidden_states, input_padding_mask, speaker_embeddings)
+            log_duration = self.duration_predictor(hidden_states_txt, input_padding_mask, speaker_embeddings)
             log_duration = torch.sum((log_duration - log_duration_padded) ** 2, [1, 2]) / torch.sum(input_padding_mask)
 
         # expand priors
-        prior_means = torch.matmul(attn.squeeze(1), prior_means.transpose(1, 2)).transpose(1, 2)
-        prior_log_variances = torch.matmul(attn.squeeze(1), prior_log_variances.transpose(1, 2)).transpose(1, 2)
+        # prior_means_txt = torch.matmul(attn.squeeze(1), prior_means_txt.transpose(1, 2)).transpose(1, 2)
+        # prior_log_variances_txt = torch.matmul(attn.squeeze(1), prior_log_variances_txt.transpose(1, 2)).transpose(1, 2)
+        prior_means_dur = torch.matmul(attn.squeeze(1), prior_means_txt.transpose(1, 2)).transpose(1, 2)
+        prior_log_variances_dur = torch.matmul(attn.squeeze(1), prior_log_variances_txt.transpose(1, 2)).transpose(1, 2)
+        prior_latents_dur = prior_means_dur + torch.randn_like(prior_means_dur) * torch.exp(prior_log_variances_txt) * labels_padding_mask
+
+        prior_latents_aud, prior_means_aud, prior_log_variances_aud = self.flow(prior_latents_dur, prior_means_dur, prior_log_variances_dur, labels_padding_mask, speaker_embeddings, reverse=True)
 
         label_lengths = labels_attention_mask.sum(dim=1)
-        latents_slice, ids_slice = rand_slice_segments(latents, label_lengths, segment_size=self.segment_size)
+        latents_slice, ids_slice = rand_slice_segments(posterior_latents_aud, label_lengths, segment_size=self.segment_size)
 
         waveform = self.decoder(latents_slice, speaker_embeddings)
 
@@ -2295,12 +2327,12 @@ class VitsModelForPreTraining(VitsPreTrainedModel):
                 ids_slice,
                 input_padding_mask,
                 labels_padding_mask,
-                latents,
-                prior_latents,
-                prior_means,
-                prior_log_variances,
-                posterior_means,
-                posterior_log_variances,
+                posterior_latents_aud,
+                posterior_latents_dur,
+                prior_means_txt,
+                prior_log_variances_txt,
+                posterior_means_aud,
+                posterior_log_variances_aud,
             )
             return outputs
 
@@ -2311,10 +2343,15 @@ class VitsModelForPreTraining(VitsPreTrainedModel):
             ids_slice=ids_slice,
             input_padding_mask=input_padding_mask,
             labels_padding_mask=labels_padding_mask,
-            latents=latents,
-            prior_latents=prior_latents,
-            prior_means=prior_means,
-            prior_log_variances=prior_log_variances,
-            posterior_means=posterior_means,
-            posterior_log_variances=posterior_log_variances,
+            prior_means_txt=prior_means_txt,
+            prior_log_variances_txt=prior_log_variances_txt,
+            prior_means_dur=prior_means_dur,
+            prior_log_variances_dur=prior_log_variances_dur,
+            posterior_latents_dur=posterior_latents_dur,
+            posterior_log_variances_dur=posterior_log_variances_dur,
+            posterior_latents_aud=posterior_latents_aud,
+            prior_means_aud=prior_means_aud,
+            prior_log_variances_aud=prior_log_variances_aud,
+            posterior_means_aud=posterior_means_aud,
+            posterior_log_variances_aud=posterior_log_variances_aud,
         )
