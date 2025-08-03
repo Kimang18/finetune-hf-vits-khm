@@ -35,7 +35,7 @@ from transformers.trainer_pt_utils import LengthGroupedSampler
 from transformers.trainer_utils import get_last_checkpoint, is_main_process
 from transformers.utils import send_example_telemetry
 
-from peft import get_peft_model, LoraConfig
+# from peft import get_peft_model, LoraConfig
 
 from utils import (
     plot_alignment_to_numpy,
@@ -1527,14 +1527,14 @@ def main():
         model.save_pretrained(training_args.output_dir)
 
         if training_args.push_to_hub:
-            VitsModel.from_pretrained(training_args.output_dir).push_to_hub(training_args.hub_model_id)
+            VitsModel.from_pretrained(training_args.output_dir).push_to_hub(training_args.hub_model_id, private=True)
 
     accelerator.end_training()
 
     # 13. Push FE and tokenizer
     if training_args.push_to_hub:
-        feature_extractor.push_to_hub(training_args.hub_model_id)
-        tokenizer.push_to_hub(training_args.hub_model_id)
+        feature_extractor.push_to_hub(training_args.hub_model_id, private=True)
+        tokenizer.push_to_hub(training_args.hub_model_id, private=True)
 
     logger.info("***** Training / Inference Done *****")
 
