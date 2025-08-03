@@ -440,14 +440,37 @@ def generator_loss(disc_outputs):
     return total_loss, gen_losses
 
 
-def kl_loss(prior_latents, posterior_log_variance, prior_means, prior_log_variance, labels_mask):
+def kl_loss(prior_latents: torch.Tensor, posterior_log_variance: torch.Tensor, prior_means: torch.Tensor, prior_log_variance: torch.Tensor, labels_mask: torch.Tensor):
     """
     z_p, logs_q: [b, h, t_t]
     prior_means, prior_log_variance: [b, h, t_t]
     """
 
+    prior_latents = prior_latents.float()
+    posterior_log_variance = posterior_log_variance.float()
+    prior_means = prior_means.float()
+    prior_log_variance = prior_log_variance.float()
+    labels_mask =  labels_mask.float()
     kl = prior_log_variance - posterior_log_variance - 0.5
     kl += 0.5 * ((prior_latents - prior_means) ** 2) * torch.exp(-2.0 * prior_log_variance)
+    kl = torch.sum(kl * labels_mask)
+    loss = kl / torch.sum(labels_mask)
+    return loss
+
+
+def kl_loss_normal(posterior_means: torch.Tensor, posterior_log_variance: torch.Tensor, prior_means: torch.Tensor, prior_log_variance: torch.Tensor, labels_mask: torch.Tensor):
+    """
+    z_p, logs_q: [b, h, t_t]
+    m_p, logs_p: [b, h, t_t]
+    """
+    posterior_means = posterior_means.float()
+    posterior_log_variance = posterior_log_variance.float()
+    prior_means = prior_means.float()
+    prior_log_variance = prior_log_variance.float()
+    labels_mask =  labels_mask.float()
+
+    kl = prior_log_variance - posterior_log_variance - 0.5
+    kl += 0.5 * (torch.exp(2.0 * posterior_log_variance) + (posterior_means - prior_means) ** 2) * torch.exp(-2.0 * prior_log_variance)
     kl = torch.sum(kl * labels_mask)
     loss = kl / torch.sum(labels_mask)
     return loss
@@ -527,13 +550,20 @@ def compute_val_metrics_and_losses(
         model_outputs.prior_log_variances_dur,
         model_outputs.labels_padding_mask,
     )
+    loss_kl_aud = kl_loss_normal(
+        model_outputs.posterior_means_aud,
+        model_outputs.posterior_log_variances_dur,
+        model_outputs.prior_means_aud,
+        model_outputs.prior_log_variances_aud,
+        model_outputs.labels_padding_mask,
+    )
 
-    losses_mel_kl = loss_mel + loss_kl_dur
+    losses_mel_kl = loss_mel + loss_kl_dur + loss_kl_aud
 
-    losses = torch.stack([loss_mel, loss_kl_dur, losses_mel_kl])
+    losses = torch.stack([loss_mel, loss_kl_dur, loss_kl_aud, losses_mel_kl])
     losses = accelerator.gather(losses.repeat(batch_size, 1)).mean(0)
 
-    for key, loss in zip(["val_loss_mel", "val_loss_kl_dur", "val_loss_mel_kl"], losses):
+    for key, loss in zip(["val_loss_mel", "val_loss_kl_dur", "val_loss_kl_aud", "val_loss_mel_kl"], losses):
         val_losses[key] = val_losses.get(key, 0) + loss.item()
 
     return val_losses
@@ -1195,13 +1225,20 @@ def main():
                     model_outputs.prior_log_variances_dur,
                     model_outputs.labels_padding_mask,
                 )
+                loss_kl_aud = kl_loss_normal(
+                    model_outputs.posterior_means_aud,
+                    model_outputs.posterior_log_variances_dur,
+                    model_outputs.prior_means_aud,
+                    model_outputs.prior_log_variances_aud,
+                    model_outputs.labels_padding_mask,
+                )
                 loss_fmaps = feature_loss(fmaps_target, fmaps_candidate)
                 loss_gen, losses_gen = generator_loss(discriminator_candidate)
 
                 total_generator_loss = (
                     loss_duration * training_args.weight_duration
                     + loss_mel * training_args.weight_mel
-                    + loss_kl_dur * training_args.weight_kl
+                    + (loss_kl_dur + loss_kl_aud) * training_args.weight_kl
                     + loss_fmaps * training_args.weight_fmaps
                     + loss_gen * training_args.weight_gen
                 )
@@ -1219,10 +1256,11 @@ def main():
                 losses = torch.stack(
                     [
                         # for fair comparison, don't use weighted loss
-                        loss_duration + loss_mel + loss_kl_dur + loss_fmaps + loss_gen,
+                        loss_duration + loss_mel + loss_kl_dur + loss_kl_aud + loss_fmaps + loss_gen,
                         loss_duration,
                         loss_mel,
                         loss_kl_dur,
+                        loss_kl_aud,
                         loss_fmaps,
                         loss_gen,
                         loss_disc,
@@ -1244,6 +1282,7 @@ def main():
                     train_loss_duration,
                     train_loss_mel,
                     train_loss_kl_dur,
+                    train_loss_kl_aud,
                     train_loss_fmaps,
                     train_loss_gen,
                     train_loss_disc,
@@ -1261,6 +1300,7 @@ def main():
                         "train_loss_duration": train_loss_duration,
                         "train_loss_mel": train_loss_mel,
                         "train_loss_kl_dur": train_loss_kl_dur,
+                        "train_loss_kl_aud": train_loss_kl_aud,
                         "train_loss_fmaps": train_loss_fmaps,
                         "train_loss_gen": train_loss_gen,
                         "lr": disc_lr_scheduler.get_last_lr()[0],
@@ -1301,6 +1341,7 @@ def main():
                 "step_loss_duration": loss_duration.detach().item(),
                 "step_loss_mel": loss_mel.detach().item(),
                 "step_loss_kl_dur": loss_kl_dur.detach().item(),
+                "step_loss_kl_aud": loss_kl_aud.detach().item(),
                 "step_loss_fmaps": loss_fmaps.detach().item(),
                 "step_loss_gen": loss_gen.detach().item(),
                 "step_loss_disc": loss_disc.detach().item(),
