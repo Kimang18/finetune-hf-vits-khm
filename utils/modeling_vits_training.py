@@ -165,6 +165,7 @@ class VitsTrainingOutput(ModelOutput):
     prior_log_variances_aud: torch.FloatTensor = None
     posterior_means_aud: torch.FloatTensor = None
     posterior_log_variances_aud: torch.FloatTensor = None
+    posterior_latents_aud: torch.FloatTensor = None
 
 
 @torch.jit.script
@@ -1014,7 +1015,7 @@ class VitsResidualCouplingBlock(nn.Module):
                 means = torch.flip(means, [1])
                 log_variances = torch.flip(log_variances, [1])
                 inputs, means, log_variances = flow(inputs, means, log_variances, padding_mask, global_conditioning, reverse=True)
-        return inputs, means, logs
+        return inputs, means, log_variances
 
     def apply_weight_norm(self):
         for flow in self.flows:
@@ -2128,7 +2129,7 @@ class VitsModelForPreTraining(VitsPreTrainedModel):
         prior_log_variances = torch.matmul(attn.squeeze(1), prior_log_variances).transpose(1, 2)
 
         prior_latents = prior_means + torch.randn_like(prior_means) * torch.exp(prior_log_variances) * self.noise_scale
-        latents = self.flow(prior_latents, output_padding_mask, speaker_embeddings, reverse=True)
+        latents, _, _ = self.flow(prior_latents, prior_means, prior_log_variances, output_padding_mask, speaker_embeddings, reverse=True)
 
         spectrogram = latents * output_padding_mask
         waveform = self.decoder(spectrogram, speaker_embeddings)
@@ -2310,7 +2311,7 @@ class VitsModelForPreTraining(VitsPreTrainedModel):
         # prior_log_variances_txt = torch.matmul(attn.squeeze(1), prior_log_variances_txt.transpose(1, 2)).transpose(1, 2)
         prior_means_dur = torch.matmul(attn.squeeze(1), prior_means_txt.transpose(1, 2)).transpose(1, 2)
         prior_log_variances_dur = torch.matmul(attn.squeeze(1), prior_log_variances_txt.transpose(1, 2)).transpose(1, 2)
-        prior_latents_dur = prior_means_dur + torch.randn_like(prior_means_dur) * torch.exp(prior_log_variances_txt) * labels_padding_mask
+        prior_latents_dur = prior_means_dur + torch.randn_like(prior_means_dur) * torch.exp(prior_log_variances_dur) * labels_padding_mask
 
         prior_latents_aud, prior_means_aud, prior_log_variances_aud = self.flow(prior_latents_dur, prior_means_dur, prior_log_variances_dur, labels_padding_mask, speaker_embeddings, reverse=True)
 
@@ -2327,10 +2328,15 @@ class VitsModelForPreTraining(VitsPreTrainedModel):
                 ids_slice,
                 input_padding_mask,
                 labels_padding_mask,
-                posterior_latents_aud,
-                posterior_latents_dur,
                 prior_means_txt,
                 prior_log_variances_txt,
+                prior_means_dur,
+                prior_log_variances_dur,
+                posterior_latents_dur,
+                posterior_log_variances_dur,
+                posterior_latents_aud,
+                prior_means_aud,
+                prior_log_variances_aud,
                 posterior_means_aud,
                 posterior_log_variances_aud,
             )
