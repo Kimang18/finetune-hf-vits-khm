@@ -30,7 +30,7 @@
     "lr_decay": 0.999875,
     "adam_beta1": 0.8,
     "adam_beta2": 0.99,
-    "adam_epsilon": 1e-8,
+    "adam_epsilon": 1e-9,
     "weight_decay": 0.01,
     "warmup_ratio": 0.01,
     "group_by_length": false,
@@ -46,10 +46,10 @@
     "weight_disc": 3,
     "weight_fmaps": 1,
     "weight_gen": 1,
-    "weight_kl_dur": 1.5,
-    "weight_kl_aud": 0.025,
+    "weight_kl_dur": 2,
+    "weight_kl_aud": 0.05,
     "weight_duration": 1,
-    "weight_mel": 35,
+    "weight_mel": 45,
 
     "fp16": true,
     "seed": 168
