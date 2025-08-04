@@ -46,7 +46,8 @@
     "weight_disc": 3,
     "weight_fmaps": 1,
     "weight_gen": 1,
-    "weight_kl": 1.5,
+    "weight_kl_dur": 2.0,
+    "weight_kl_aud": 0.05,
     "weight_duration": 1,
     "weight_mel": 35,
 

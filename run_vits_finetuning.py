@@ -159,7 +159,9 @@ class VITSTrainingArguments(TrainingArguments):
 
     weight_duration: float = field(default=1.0, metadata={"help": "Duration loss weight."})
 
-    weight_kl: float = field(default=1.5, metadata={"help": "KL loss weight."})
+    weight_kl_dur: float = field(default=2.0, metadata={"help": "KL loss weight for duration."})
+
+    weight_kl_aud: float = field(default=0.05, metadata={"help": "KL loss weight for audio."})
 
     weight_mel: float = field(default=35.0, metadata={"help": "Mel-spectrogram loss weight"})
 
@@ -450,7 +452,8 @@ def kl_loss(prior_latents: torch.Tensor, posterior_log_variance: torch.Tensor, p
     posterior_log_variance = posterior_log_variance.float()
     prior_means = prior_means.float()
     prior_log_variance = prior_log_variance.float()
-    labels_mask =  labels_mask.float()
+    labels_mask = labels_mask.float()
+
     kl = prior_log_variance - posterior_log_variance - 0.5
     kl += 0.5 * ((prior_latents - prior_means) ** 2) * torch.exp(-2.0 * prior_log_variance)
     kl = torch.sum(kl * labels_mask)
@@ -467,7 +470,7 @@ def kl_loss_normal(posterior_means: torch.Tensor, posterior_log_variance: torch.
     posterior_log_variance = posterior_log_variance.float()
     prior_means = prior_means.float()
     prior_log_variance = prior_log_variance.float()
-    labels_mask =  labels_mask.float()
+    labels_mask = labels_mask.float()
 
     kl = prior_log_variance - posterior_log_variance - 0.5
     kl += 0.5 * (torch.exp(2.0 * posterior_log_variance) + (posterior_means - prior_means) ** 2) * torch.exp(-2.0 * prior_log_variance)
@@ -1238,7 +1241,8 @@ def main():
                 total_generator_loss = (
                     loss_duration * training_args.weight_duration
                     + loss_mel * training_args.weight_mel
-                    + (loss_kl_dur + loss_kl_aud) * training_args.weight_kl
+                    + loss_kl_dur * training_args.weight_kl_dur
+                    + loss_kl_aud * training_args.weight_kl_aud
                     + loss_fmaps * training_args.weight_fmaps
                     + loss_gen * training_args.weight_gen
                 )
