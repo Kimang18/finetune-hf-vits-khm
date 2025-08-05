@@ -41,6 +41,7 @@ from utils import (
     plot_alignment_to_numpy,
     plot_spectrogram_to_numpy,
     VitsDiscriminator,
+    VitsDurationDiscriminator,
     VitsModelForPreTraining,
     VitsFeatureExtractor,
     slice_segments,
@@ -1014,6 +1015,7 @@ def main():
         discriminator = VitsDiscriminator.from_pretrained(tmpdirname)
         for disc in discriminator.discriminators:
             disc.apply_weight_norm()
+        dur_discriminator = VitsDurationDiscriminator(config=config)
     del model.discriminator
 
     # init gen_optimizer, gen_lr_scheduler, disc_optimizer, dics_lr_scheduler
@@ -1027,6 +1029,14 @@ def main():
 
     disc_optimizer = torch.optim.AdamW(
         discriminator.parameters(),
+        training_args.learning_rate,
+        betas=[training_args.adam_beta1, training_args.adam_beta2],
+        eps=training_args.adam_epsilon,
+        weight_decay=training_args.weight_decay,
+    )
+
+    dur_disc_optimizer = torch.optim.AdamW(
+        dur_discriminator.parameters(),
         training_args.learning_rate,
         betas=[training_args.adam_beta1, training_args.adam_beta2],
         eps=training_args.adam_epsilon,
@@ -1051,6 +1061,10 @@ def main():
         disc_lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(
             disc_optimizer, gamma=training_args.lr_decay, last_epoch=-1
         )
+        dur_disc_lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(
+            dur_disc_optimizer, gamma=training_args.lr_decay, last_epoch=-1
+        )
+
         # gen_warmup_sl = torch.optim.lr_scheduler.LinearLR(
         #     gen_optimizer, start_factor=1e-3, end_factor=1.0, total_iters=num_warmups_steps
         # )
@@ -1083,23 +1097,36 @@ def main():
             num_training_steps=num_training_steps,
         )
 
+        dur_disc_lr_scheduler = get_scheduler(
+            training_args.lr_scheduler_type,
+            optimizer=dur_disc_optimizer,
+            num_warmup_steps=num_warmups_steps if num_warmups_steps > 0 else None,
+            num_training_steps=num_training_steps,
+        )
+
     # Prepare everything with our `accelerator`.
     (
         model,
         discriminator,
+        dur_discriminator,
         gen_optimizer,
         gen_lr_scheduler,
         disc_optimizer,
         disc_lr_scheduler,
+        dur_disc_optimizer,
+        dur_disc_lr_scheduler,
         train_dataloader,
         eval_dataloader,
     ) = accelerator.prepare(
         model,
         discriminator,
+        dur_discriminator,
         gen_optimizer,
         gen_lr_scheduler,
         disc_optimizer,
         disc_lr_scheduler,
+        dur_disc_optimizer,
+        dur_disc_lr_scheduler,
         train_dataloader,
         eval_dataloader,
     )
@@ -1162,12 +1189,13 @@ def main():
         train_losses = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
         if training_args.do_step_schedule_per_epoch:
+            dur_disc_lr_scheduler.step()
             disc_lr_scheduler.step()
             gen_lr_scheduler.step()
 
         for step, batch in enumerate(train_dataloader):
             # print(f"batch {step}, process{accelerator.process_index}, waveform {(batch['waveform'].shape)}, tokens {(batch['input_ids'].shape)}... ")
-            with accelerator.accumulate(model, discriminator):
+            with accelerator.accumulate(model, discriminator, dur_discriminator):
                 # forward through model
                 mas_noise_scale = max(training_args.mas_noise_scale - global_step * training_args.mas_noise_scale_decay, 0.0)
                 model_outputs = model(
@@ -1196,6 +1224,23 @@ def main():
                 #  Train Discriminator
                 # -----------------------
 
+                # duration discriminator
+                discriminator_dur_target, discriminator_dur_candidate = dur_discriminator(
+                    model_outputs.hidden_states_txt.detach(), model_outputs.input_padding_mask.detach(), model_outputs.logw_padded.detach(), model_outputs.logw.detach()
+                )
+
+                loss_dur_disc, loss_dur_real_disc, loss_dur_fake_disc = discriminator_loss(
+                    discriminator_dur_target, discriminator_dur_candidate
+                )
+                # backpropagate duration discriminator
+                accelerator.backward(loss_dur_disc * training_args.weight_disc)
+                if accelerator.sync_gradients:
+                    accelerator.clip_grad_norm_(dur_discriminator.parameters(), training_args.max_grad_norm)
+                dur_disc_optimizer.step()
+                if not training_args.do_step_schedule_per_epoch:
+                    dur_disc_lr_scheduler.step()
+                dur_disc_optimizer.zero_grad()
+
                 discriminator_target, _ = discriminator(target_waveform)
                 discriminator_candidate, _ = discriminator(model_outputs.waveform.detach())
 
@@ -1219,6 +1264,10 @@ def main():
                 _, fmaps_target = discriminator(target_waveform)
                 discriminator_candidate, fmaps_candidate = discriminator(model_outputs.waveform)
 
+                discriminator_dur_target, discriminator_dur_candidate = dur_discriminator(
+                    model_outputs.hidden_states_txt, model_outputs.input_padding_mask, model_outputs.logw_padded, model_outputs.logw
+                )
+
                 loss_duration = torch.sum(model_outputs.log_duration)
                 loss_mel = torch.nn.functional.l1_loss(mel_scaled_target, mel_scaled_generation)
                 loss_kl_dur = kl_loss(
@@ -1236,7 +1285,8 @@ def main():
                     model_outputs.labels_padding_mask,
                 )
                 loss_fmaps = feature_loss(fmaps_target, fmaps_candidate)
-                loss_gen, losses_gen = generator_loss(discriminator_candidate)
+                loss_gen, _ = generator_loss(discriminator_candidate)
+                loss_dur_gen, _ = generator_loss(discriminator_dur_target)
 
                 total_generator_loss = (
                     loss_duration * training_args.weight_duration
@@ -1244,7 +1294,7 @@ def main():
                     + loss_kl_dur * training_args.weight_kl_dur
                     + loss_kl_aud * training_args.weight_kl_aud
                     + loss_fmaps * training_args.weight_fmaps
-                    + loss_gen * training_args.weight_gen
+                    + (loss_gen + loss_dur_gen) * training_args.weight_gen
                 )
 
                 # backpropagate
@@ -1260,14 +1310,14 @@ def main():
                 losses = torch.stack(
                     [
                         # for fair comparison, don't use weighted loss
-                        loss_duration + loss_mel + loss_kl_dur + loss_kl_aud + loss_fmaps + loss_gen,
+                        loss_duration + loss_mel + loss_kl_dur + loss_kl_aud + loss_fmaps + loss_gen + loss_dur_gen,
                         loss_duration,
                         loss_mel,
                         loss_kl_dur,
                         loss_kl_aud,
                         loss_fmaps,
-                        loss_gen,
-                        loss_disc,
+                        loss_gen + loss_dur_gen,
+                        loss_disc + loss_dur_disc,
                         loss_real_disc,
                         loss_fake_disc,
                     ]
@@ -1347,8 +1397,8 @@ def main():
                 "step_loss_kl_dur": loss_kl_dur.detach().item(),
                 "step_loss_kl_aud": loss_kl_aud.detach().item(),
                 "step_loss_fmaps": loss_fmaps.detach().item(),
-                "step_loss_gen": loss_gen.detach().item(),
-                "step_loss_disc": loss_disc.detach().item(),
+                "step_loss_gen": loss_gen.detach().item() + loss_dur_gen.detach().item(),
+                "step_loss_disc": loss_disc.detach().item() + loss_dur_disc.detach().item(),
                 "step_loss_real_disc": loss_real_disc.detach().item(),
                 "step_loss_fake_disc": loss_fake_disc.detach().item(),
             }

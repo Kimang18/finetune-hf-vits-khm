@@ -166,6 +166,9 @@ class VitsTrainingOutput(ModelOutput):
     posterior_means_aud: torch.FloatTensor = None
     posterior_log_variances_aud: torch.FloatTensor = None
     posterior_latents_aud: torch.FloatTensor = None
+    hidden_states_txt: torch.FloatTensor = None
+    logw: torch.FloatTensor = None
+    logw_padded: torch.FloatTensor = None
 
 
 @torch.jit.script
@@ -1621,6 +1624,80 @@ class VitsEncoder(nn.Module):
         )
 
 
+class VitsDurationDiscriminatorV2(nn.Module):  # vits2
+    # TODO : not using "spk conditioning" for now according to the paper.
+    # Can be a better discriminator if we use it.
+    def __init__(
+        self, config
+    ):
+        super().__init__()
+        kernel_size = config.duration_predictor_kernel_size
+        filter_channels = config.duration_predictor_filter_channels
+
+        self.in_channels = config.hidden_size
+        self.filter_channels = filter_channels
+        self.kernel_size = kernel_size
+        self.p_dropout = config.duration_predictor_dropout
+        self.gin_channels = 0 # config.gin_channels # it is bigger than 0 when there are multiple speakers
+
+        self.conv_1 = nn.Conv1d(
+            self.in_channels, filter_channels, kernel_size, padding=kernel_size // 2
+        )
+        self.norm_1 = nn.LayerNorm(filter_channels)
+        self.conv_2 = nn.Conv1d(
+            filter_channels, filter_channels, kernel_size, padding=kernel_size // 2
+        )
+        self.norm_2 = nn.LayerNorm(filter_channels)
+        self.dur_proj = nn.Conv1d(1, filter_channels, 1)
+
+        self.pre_out_conv_1 = nn.Conv1d(
+            2 * filter_channels, filter_channels, kernel_size, padding=kernel_size // 2
+        )
+        self.pre_out_norm_1 = nn.LayerNorm(filter_channels)
+        self.pre_out_conv_2 = nn.Conv1d(
+            filter_channels, filter_channels, kernel_size, padding=kernel_size // 2
+        )
+        self.pre_out_norm_2 = nn.LayerNorm(filter_channels)
+
+        # if gin_channels != 0:
+        #   self.cond = nn.Conv1d(gin_channels, in_channels, 1)
+
+        self.output_layer = nn.Sequential(nn.Linear(filter_channels, 1), nn.Sigmoid())
+
+    def forward_probability(self, x, x_mask, dur, g=None):
+        dur = self.dur_proj(dur)
+        x = torch.cat([x, dur], dim=1)
+        x = self.pre_out_conv_1(x * x_mask)
+        x = torch.relu(x)
+        x = self.pre_out_norm_1(x.mT).mT
+        x = self.pre_out_conv_2(x * x_mask)
+        x = torch.relu(x)
+        x = self.pre_out_norm_2(x.mT).mT
+        x = x * x_mask
+        x = x.transpose(1, 2)
+        output_prob = self.output_layer(x)
+        return output_prob
+
+    def forward(self, x, x_mask, dur_r, dur_hat, g=None):
+        x = torch.detach(x)
+        # if g is not None:
+        #   g = torch.detach(g)
+        #   x = x + self.cond(g)
+        x = self.conv_1(x * x_mask)
+        x = torch.relu(x)
+        x = self.norm_1(x.mT).mT
+        x = self.conv_2(x * x_mask)
+        x = torch.relu(x)
+        x = self.norm_2(x.mT).mT
+
+        output_probs = []
+        for dur in [dur_r, dur_hat]:
+            output_prob = self.forward_probability(x, x_mask, dur, g)
+            output_probs.append([output_prob])
+
+        return output_probs
+
+
 class VitsTextEncoder(nn.Module):
     """
     Transformer encoder that uses relative positional representation instead of absolute positional encoding.
@@ -2301,14 +2378,15 @@ class VitsModelForPreTraining(VitsPreTrainedModel):
                 hidden_states_txt, input_padding_mask, speaker_embeddings, durations=durations, reverse=False
             )
             log_duration = log_duration / torch.sum(input_padding_mask)
+
+            logw = self.duration_predictor(hidden_states_txt, input_padding_mask, speaker_embeddings, reverse=True, noise_scale=1.0)
+            logw_padded = torch.log(durations + 1e-6) * input_padding_mask
         else:
-            log_duration_padded = torch.log(durations + 1e-6) * input_padding_mask
-            log_duration = self.duration_predictor(hidden_states_txt, input_padding_mask, speaker_embeddings)
-            log_duration = torch.sum((log_duration - log_duration_padded) ** 2, [1, 2]) / torch.sum(input_padding_mask)
+            logw_padded = torch.log(durations + 1e-6) * input_padding_mask
+            logw = self.duration_predictor(hidden_states_txt, input_padding_mask, speaker_embeddings)
+            log_duration = torch.sum((logw - logw_padded) ** 2, [1, 2]) / torch.sum(input_padding_mask)
 
         # expand priors
-        # prior_means_txt = torch.matmul(attn.squeeze(1), prior_means_txt.transpose(1, 2)).transpose(1, 2)
-        # prior_log_variances_txt = torch.matmul(attn.squeeze(1), prior_log_variances_txt.transpose(1, 2)).transpose(1, 2)
         prior_means_dur = torch.matmul(attn.squeeze(1), prior_means_txt.transpose(1, 2)).transpose(1, 2)
         prior_log_variances_dur = torch.matmul(attn.squeeze(1), prior_log_variances_txt.transpose(1, 2)).transpose(1, 2)
         prior_latents_dur = prior_means_dur + torch.randn_like(prior_means_dur) * torch.exp(prior_log_variances_dur) * labels_padding_mask
@@ -2339,6 +2417,8 @@ class VitsModelForPreTraining(VitsPreTrainedModel):
                 prior_log_variances_aud,
                 posterior_means_aud,
                 posterior_log_variances_aud,
+                logw,
+                logw_padded,
             )
             return outputs
 
@@ -2360,4 +2440,7 @@ class VitsModelForPreTraining(VitsPreTrainedModel):
             prior_log_variances_aud=prior_log_variances_aud,
             posterior_means_aud=posterior_means_aud,
             posterior_log_variances_aud=posterior_log_variances_aud,
+            hidden_states_txt=hidden_states_txt,
+            logw=logw,
+            logw_padded=logw_padded,
         )
