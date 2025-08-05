@@ -443,20 +443,21 @@ def generator_loss(disc_outputs):
     return total_loss, gen_losses
 
 
-def kl_loss(prior_latents: torch.Tensor, posterior_log_variance: torch.Tensor, prior_means: torch.Tensor, prior_log_variance: torch.Tensor, labels_mask: torch.Tensor):
+def kl_loss(posterior_latents: torch.Tensor, posterior_log_variance: torch.Tensor, prior_means: torch.Tensor, prior_log_variance: torch.Tensor, labels_mask: torch.Tensor):
+    #NOTE: original branch wrote z_p which is `prior latents` and it is not a correct naming
     """
     z_p, logs_q: [b, h, t_t]
     prior_means, prior_log_variance: [b, h, t_t]
     """
 
-    prior_latents = prior_latents.float()
+    posterior_latents = posterior_latents.float()
     posterior_log_variance = posterior_log_variance.float()
     prior_means = prior_means.float()
     prior_log_variance = prior_log_variance.float()
     labels_mask = labels_mask.float()
 
     kl = prior_log_variance - posterior_log_variance - 0.5
-    kl += 0.5 * ((prior_latents - prior_means) ** 2) * torch.exp(-2.0 * prior_log_variance)
+    kl += 0.5 * ((posterior_latents - prior_means) ** 2) * torch.exp(-2.0 * prior_log_variance)
     kl = torch.sum(kl * labels_mask)
     loss = kl / torch.sum(labels_mask)
     return loss
