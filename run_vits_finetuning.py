@@ -556,7 +556,7 @@ def compute_val_metrics_and_losses(
     )
     loss_kl_aud = kl_loss_normal(
         model_outputs.posterior_means_aud,
-        model_outputs.posterior_log_variances_dur,
+        model_outputs.posterior_log_variances_aud,
         model_outputs.prior_means_aud,
         model_outputs.prior_log_variances_aud,
         model_outputs.labels_padding_mask,
@@ -1279,7 +1279,7 @@ def main():
                 )
                 loss_kl_aud = kl_loss_normal(
                     model_outputs.posterior_means_aud,
-                    model_outputs.posterior_log_variances_dur,
+                    model_outputs.posterior_log_variances_aud,
                     model_outputs.prior_means_aud,
                     model_outputs.prior_log_variances_aud,
                     model_outputs.labels_padding_mask,

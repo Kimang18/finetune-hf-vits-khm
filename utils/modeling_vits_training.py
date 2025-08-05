@@ -165,7 +165,6 @@ class VitsTrainingOutput(ModelOutput):
     prior_log_variances_aud: torch.FloatTensor = None
     posterior_means_aud: torch.FloatTensor = None
     posterior_log_variances_aud: torch.FloatTensor = None
-    posterior_latents_aud: torch.FloatTensor = None
     hidden_states_txt: torch.FloatTensor = None
     logw: torch.FloatTensor = None
     logw_padded: torch.FloatTensor = None
@@ -2412,7 +2411,6 @@ class VitsModelForPreTraining(VitsPreTrainedModel):
                 prior_log_variances_dur,
                 posterior_latents_dur,
                 posterior_log_variances_dur,
-                posterior_latents_aud,
                 prior_means_aud,
                 prior_log_variances_aud,
                 posterior_means_aud,
@@ -2435,7 +2433,6 @@ class VitsModelForPreTraining(VitsPreTrainedModel):
             prior_log_variances_dur=prior_log_variances_dur,
             posterior_latents_dur=posterior_latents_dur,
             posterior_log_variances_dur=posterior_log_variances_dur,
-            posterior_latents_aud=posterior_latents_aud,
             prior_means_aud=prior_means_aud,
             prior_log_variances_aud=prior_log_variances_aud,
             posterior_means_aud=posterior_means_aud,
