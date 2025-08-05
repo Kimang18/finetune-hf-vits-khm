@@ -933,7 +933,7 @@ class VitsResidualCouplingLayer(nn.Module):
                 self.half_channels,
                 self.half_channels,
                 n_heads=2,
-                n_layers=4,
+                n_layers=2,
                 kernel_size=3,
                 dropout=0.1,
                 window_size=None
@@ -960,7 +960,7 @@ class VitsResidualCouplingLayer(nn.Module):
             mean_flow = stats
             log_stddev = torch.zeros_like(mean_flow)
 
-        m1 , m2 = torch.split(means, [self.half_channels] * 2, dim=1)
+        m1, m2 = torch.split(means, [self.half_channels] * 2, dim=1)
         log1, log2 = torch.split(log_variances, [self.half_channels] * 2, dim=1)
         if not reverse:
             second_half = mean_flow + second_half * torch.exp(log_stddev) * padding_mask
@@ -977,12 +977,11 @@ class VitsResidualCouplingLayer(nn.Module):
             # outputs = torch.cat([first_half, second_half], dim=1)
             # return outputs, None
 
-        outputs = torch.cat([first_half, second_half], dim=1)
+        inputs = torch.cat([first_half, second_half], dim=1)
         means = torch.cat([m1, m2], dim=1)
-        logs = torch.cat([log1, log2], dim=1)
+        log_variances = torch.cat([log1, log2], dim=1)
         # log_determinant = torch.sum(log_stddev, [1, 2])
-        return outputs, means, logs
-
+        return inputs, means, log_variances
 
     def apply_weight_norm(self):
         nn.utils.weight_norm(self.conv_pre)
@@ -1003,18 +1002,18 @@ class VitsResidualCouplingBlock(nn.Module):
             self.flows.append(VitsResidualCouplingLayer(config))
 
     def forward(self, inputs, means, log_variances, padding_mask, global_conditioning=None, reverse=False):
-        if not reverse:
-            for flow in self.flows:
-                inputs, means, log_variances = flow(inputs, means, log_variances, padding_mask, global_conditioning)
-                inputs = torch.flip(inputs, [1])
-                means = torch.flip(means, [1])
-                log_variances = torch.flip(log_variances, [1])
-        else:
+        if reverse:
             for flow in reversed(self.flows):
                 inputs = torch.flip(inputs, [1])
                 means = torch.flip(means, [1])
                 log_variances = torch.flip(log_variances, [1])
                 inputs, means, log_variances = flow(inputs, means, log_variances, padding_mask, global_conditioning, reverse=True)
+        else:
+            for flow in self.flows:
+                inputs, means, log_variances = flow(inputs, means, log_variances, padding_mask, global_conditioning)
+                inputs = torch.flip(inputs, [1])
+                means = torch.flip(means, [1])
+                log_variances = torch.flip(log_variances, [1])
         return inputs, means, log_variances
 
     def apply_weight_norm(self):
