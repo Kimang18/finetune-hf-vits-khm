@@ -155,8 +155,6 @@ class VitsTrainingOutput(ModelOutput):
     ids_slice: torch.FloatTensor = None
     input_padding_mask: torch.FloatTensor = None
     labels_padding_mask: torch.FloatTensor = None
-    prior_means_txt: torch.FloatTensor = None
-    prior_log_variances_txt: torch.FloatTensor = None
     prior_means_dur: torch.FloatTensor = None
     prior_log_variances_dur: torch.FloatTensor = None
     posterior_latents_dur: torch.FloatTensor = None
@@ -2390,7 +2388,7 @@ class VitsModelForPreTraining(VitsPreTrainedModel):
         prior_log_variances_dur = torch.matmul(attn.squeeze(1), prior_log_variances_txt.transpose(1, 2)).transpose(1, 2)
         prior_latents_dur = prior_means_dur + torch.randn_like(prior_means_dur) * torch.exp(prior_log_variances_dur) * labels_padding_mask
 
-        prior_latents_aud, prior_means_aud, prior_log_variances_aud = self.flow(prior_latents_dur, prior_means_dur, prior_log_variances_dur, labels_padding_mask, speaker_embeddings, reverse=True)
+        _, prior_means_aud, prior_log_variances_aud = self.flow(prior_latents_dur, prior_means_dur, prior_log_variances_dur, labels_padding_mask, speaker_embeddings, reverse=True)
 
         label_lengths = labels_attention_mask.sum(dim=1)
         latents_slice, ids_slice = rand_slice_segments(posterior_latents_aud, label_lengths, segment_size=self.segment_size)
@@ -2405,8 +2403,6 @@ class VitsModelForPreTraining(VitsPreTrainedModel):
                 ids_slice,
                 input_padding_mask,
                 labels_padding_mask,
-                prior_means_txt,
-                prior_log_variances_txt,
                 prior_means_dur,
                 prior_log_variances_dur,
                 posterior_latents_dur,
@@ -2415,6 +2411,7 @@ class VitsModelForPreTraining(VitsPreTrainedModel):
                 prior_log_variances_aud,
                 posterior_means_aud,
                 posterior_log_variances_aud,
+                hidden_states_txt,
                 logw,
                 logw_padded,
             )
@@ -2427,8 +2424,6 @@ class VitsModelForPreTraining(VitsPreTrainedModel):
             ids_slice=ids_slice,
             input_padding_mask=input_padding_mask,
             labels_padding_mask=labels_padding_mask,
-            prior_means_txt=prior_means_txt,
-            prior_log_variances_txt=prior_log_variances_txt,
             prior_means_dur=prior_means_dur,
             prior_log_variances_dur=prior_log_variances_dur,
             posterior_latents_dur=posterior_latents_dur,
