@@ -925,7 +925,7 @@ class VitsResidualCouplingLayer(nn.Module):
     def __init__(self, config: VitsConfig):
         super().__init__()
         self.mean_only = True
-        self.half_channels = config.flow_size // 2
+        self.half_channels = config.flow_size // 2 # =96
         self.pre_transformer = (
             RelativePositionTransformer(
                 self.half_channels,
@@ -934,7 +934,7 @@ class VitsResidualCouplingLayer(nn.Module):
                 self.half_channels,
                 n_heads=2,
                 n_layers=1,
-                kernel_size=3,
+                kernel_size=5,
                 dropout=0.1,
                 window_size=None
             )
