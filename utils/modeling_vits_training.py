@@ -1628,12 +1628,12 @@ class VitsDurationDiscriminatorV2(nn.Module):  # vits2
     ):
         super().__init__()
         kernel_size = config.duration_predictor_kernel_size
-        filter_channels = config.duration_predictor_filter_channels
+        filter_channels = config.hidden_size
 
         self.in_channels = config.hidden_size
         self.filter_channels = filter_channels
         self.kernel_size = kernel_size
-        self.p_dropout = config.duration_predictor_dropout
+        self.p_dropout = 0.1 # config.duration_predictor_dropout
         self.gin_channels = 0 # config.gin_channels # it is bigger than 0 when there are multiple speakers
 
         self.conv_1 = nn.Conv1d(
