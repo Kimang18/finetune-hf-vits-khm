@@ -1287,7 +1287,7 @@ def main():
                 )
                 loss_fmaps = feature_loss(fmaps_target, fmaps_candidate)
                 loss_gen, _ = generator_loss(discriminator_candidate)
-                loss_dur_gen, _ = generator_loss(discriminator_dur_target)
+                loss_dur_gen, _ = generator_loss(discriminator_dur_candidate)
 
                 total_generator_loss = (
                     loss_duration * training_args.weight_duration
