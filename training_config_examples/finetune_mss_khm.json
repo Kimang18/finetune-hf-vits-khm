@@ -43,13 +43,13 @@
 
     "mas_noise_scale": 0.01,
     "mas_noise_scale_decay": 2.0e-5,
-    "weight_disc": 3,
+    "weight_disc": 1,
     "weight_fmaps": 1,
     "weight_gen": 1,
-    "weight_kl_dur": 1.5,
+    "weight_kl_dur": 2.0,
     "weight_kl_aud": 0.05,
     "weight_duration": 1,
-    "weight_mel": 35,
+    "weight_mel": 45,
 
     "fp16": true,
     "seed": 168
