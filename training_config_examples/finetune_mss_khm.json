@@ -6,7 +6,7 @@
     "overwrite_output_dir": true,
     "output_dir": "/content/tmp/mms_finetuned_khm",
 
-    "dataset_name": "Kimang18/clean_khmer_mpwt_speech-12",
+    "dataset_name": "Kimang18/openslr-slr42-km-KH",
     "audio_column_name": "audio", 
     "text_column_name":"transcription",
     "train_split_name": "train",
