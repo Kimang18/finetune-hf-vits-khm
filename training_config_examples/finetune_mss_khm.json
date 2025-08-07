@@ -19,7 +19,7 @@
 
     "model_name_or_path": "/content/mms-tts-khm",
 
-    "preprocessing_num_workers": 4,
+    "preprocessing_num_workers": 2,
 
     "do_train": true,
     "num_train_epochs": 200,
@@ -27,7 +27,7 @@
     "gradient_checkpointing": false,
     "per_device_train_batch_size": 16,
     "learning_rate": 2e-4,
-    "lr_decay": 0.999167,
+    "lr_decay": 0.999875,
     "adam_beta1": 0.8,
     "adam_beta2": 0.99,
     "adam_epsilon": 1e-8,
