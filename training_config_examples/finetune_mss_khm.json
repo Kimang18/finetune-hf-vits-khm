@@ -29,7 +29,7 @@
     "learning_rate": 2e-4,
     "lr_decay": 0.999875,
     "adam_beta1": 0.9,
-    "adam_beta2": 0.7,
+    "adam_beta2": 0.99,
     "adam_epsilon": 1e-8,
     "weight_decay": 0.1,
     "warmup_ratio": 0.05,
@@ -47,7 +47,7 @@
     "weight_fmaps": 1,
     "weight_gen": 1,
     "weight_kl_dur": 3,
-    "weight_kl_aud": 1,
+    "weight_kl_aud": 0.1,
     "weight_duration": 1,
     "weight_mel": 45,
 
