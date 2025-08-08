@@ -43,7 +43,7 @@
 
     "mas_noise_scale": 0.01,
     "mas_noise_scale_decay": 2.0e-5,
-    "weight_disc": 1,
+    "weight_disc": 3,
     "weight_fmaps": 1,
     "weight_gen": 1,
     "weight_kl_dur": 2.0,
