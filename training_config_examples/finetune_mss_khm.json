@@ -22,7 +22,7 @@
     "preprocessing_num_workers": 2,
 
     "do_train": true,
-    "num_train_epochs": 16,
+    "num_train_epochs": 32,
     "gradient_accumulation_steps": 1,
     "gradient_checkpointing": false,
     "per_device_train_batch_size": 16,
@@ -31,7 +31,7 @@
     "adam_beta1": 0.9,
     "adam_beta2": 0.99,
     "adam_epsilon": 1e-8,
-    "weight_decay": 0.1,
+    "weight_decay": 0.01,
     "warmup_ratio": 0.05,
     "group_by_length": false,
 
@@ -47,7 +47,7 @@
     "weight_fmaps": 1,
     "weight_gen": 1,
     "weight_kl_dur": 3,
-    "weight_kl_aud": 0.1,
+    "weight_kl_aud": 0.05,
     "weight_duration": 1,
     "weight_mel": 45,
 
