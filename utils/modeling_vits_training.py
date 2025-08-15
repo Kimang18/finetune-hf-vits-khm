@@ -932,10 +932,10 @@ class VitsResidualCouplingLayer(nn.Module):
                 self.half_channels,
                 self.half_channels,
                 self.half_channels,
-                n_heads=2,
-                n_layers=1,
+                n_heads=3,
+                n_layers=2,
                 kernel_size=3,
-                dropout=0.1,
+                dropout=0.2,
                 window_size=None
             )
         ) if True else None
